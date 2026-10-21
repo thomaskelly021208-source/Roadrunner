@@ -1,1 +1,56 @@
+name: Build RouteRush APK
 
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract RouteRush ZIP
+        shell: bash
+        run: |
+          set -e
+          ZIP="$(find . -maxdepth 2 -type f -iname '*.zip' ! -path './.git/*' | head -n 1)"
+          if [ -z "$ZIP" ]; then
+            echo "ERROR: No ZIP file found."
+            exit 1
+          fi
+
+          mkdir -p .routerush_extract
+          unzip -o "$ZIP" -d .routerush_extract
+
+          # Move the extracted Android project into the repository root.
+          shopt -s dotglob
+          for item in .routerush_extract/*; do
+            name="$(basename "$item")"
+            [ "$name" = ".github" ] && continue
+            rm -rf "./$name"
+            mv "$item" "./$name"
+          done
+
+          rm -rf .routerush_extract
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RouteRush-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
